@@ -9,6 +9,8 @@ import static com.mongodb.client.model.Aggregates.group;
 import static com.mongodb.client.model.Aggregates.match;
 import static com.mongodb.client.model.Aggregates.project;
 import static com.mongodb.client.model.Aggregates.sort;
+import static com.mongodb.client.model.Aggregates.addFields;
+
 import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
 import static com.mongodb.client.model.Filters.gte;
@@ -59,6 +61,7 @@ import com.mongodb.MongoClientURI;
 import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Field;
 
 @Configuration
 @Controller // This means that this class is a Controller
@@ -98,7 +101,7 @@ public class MongoDaoController{
 		logger.info("endDate : "+ endDate);
 		logger.info("interval : "+ interval);
 	
-		result1 = mongodbFetch(startDate,endDate,interval);
+		result1 = mongodbFetchFromTickData(startDate,endDate,interval);
 
 		logger.info("Exiting /aggregatedPullFromTickBatch");
 		
@@ -118,7 +121,7 @@ public class MongoDaoController{
 		logger.info("endDate : "+ endDate);
 		logger.info("interval : "+ interval);
 	
-		result1 = mongodbFetch(startDate,endDate,interval);
+		result1 = mongodbFetchFromMinuteData(startDate,endDate,interval);
 
 		logger.info("Exiting /aggregatedPullFromMinuteBatch");
 		
@@ -138,7 +141,7 @@ public class MongoDaoController{
 		logger.info("endDate : "+ endDate);
 		logger.info("interval : "+ interval);
 	
-		result1 = mongodbFetch(startDate,endDate,1);
+		result1 = mongodbFetchFromTickData(startDate,endDate,1);
 		
 		if(result1.size() > 0) {
 	        MongoCollection<Document> minute_collection = mongoDatabase.getCollection("minute_data");
@@ -150,7 +153,7 @@ public class MongoDaoController{
 		return new Document("count",result1.size());
 	  }
 	
-	public static List<Document>  mongodbFetch(String fromDate, String toDate, int interval) throws ParseException {
+	public static List<Document>  mongodbFetchFromTickData(String fromDate, String toDate, int interval) throws ParseException {
 		
 			MongoCollection<Document> collection = mongoDatabase.getCollection("tick_data");
 			
@@ -189,6 +192,40 @@ public class MongoDaoController{
 			
 	}
 	
+	public static List<Document>  mongodbFetchFromMinuteData(String fromDate, String toDate, int interval2) throws ParseException {
+		
+		MongoCollection<Document> collection = mongoDatabase.getCollection("minute_data");
+		
+		SimpleDateFormat simpleDateFormat = new SimpleDateFormat ("yyyy-MM-dd");
+        /*fromDate ="2020-07-03"; 
+        toDate ="2020-07-04";*/
+        Date startDate = simpleDateFormat.parse(fromDate);
+        Date endDate = simpleDateFormat.parse(toDate);
+        
+
+        AggregateIterable<Document> result1 = collection.aggregate(Arrays.asList(
+        addFields(new Field("time", 
+        	    new Document("$dateFromParts", 
+        	    new Document("year", "$_id.tickDate.year")
+        	                .append("month", "$_id.tickDate.month")
+        	                .append("day", "$_id.tickDate.day")
+        	                .append("hour", "$_id.tickDate.hour")
+        	                .append("minute", "$_id.tickDate.interval")))), 
+        match(and(Arrays.asList(gte("time", 
+        	                startDate), lte("time",endDate)))),
+        eq("$addFields",eq("_id.tickDate.minute",new Document("$subtract",Arrays.asList("$_id.tickDate.interval",new Document("$mod",Arrays.asList("$_id.tickDate.interval",interval2)))))),
+		project(exclude("_id.tickDate.millisecond", "_id.tickDate.second","_id.tickDate.interval")))
+
+        );
+        
+	    Iterator<Document> iter = result1.iterator();
+	    List<Document> resultInserts = new ArrayList<Document>();
+	    iter.forEachRemaining(resultInserts::add); 
+	
+		return resultInserts;
+		
+	}
+	
 	
 	@Scheduled(cron="0 45 15 * * MON-FRI",zone="IST")
 	public void dailyBatchAggregateLoad() throws ParseException  {
@@ -213,7 +250,7 @@ public class MongoDaoController{
 	    logger.info("Starting Minute Aggregation for Date:" + fromDate + " to " + toDate);
 	    
 	    int interval = 1;
-	    List<Document> resultInserts= mongodbFetch(fromDate, toDate, interval);
+	    List<Document> resultInserts= mongodbFetchFromTickData(fromDate, toDate, interval);
         
 	    if(resultInserts.size() > 0) {
 	        MongoCollection<Document> minute_collection = mongoDatabase.getCollection("minute_data");
