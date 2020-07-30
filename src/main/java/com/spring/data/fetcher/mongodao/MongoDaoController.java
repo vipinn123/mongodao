@@ -190,8 +190,7 @@ public class MongoDaoController{
 	}
 	
 	
-	@Scheduled(cron="0 45 15 * * MON-FRI",zone="IST")	
-	//@Scheduled(fixedRate=1000)
+	@Scheduled(cron="0 30 17 * * MON-FRI",zone="IST")
 	public void dailyBatchAggregateLoad() throws ParseException  {
 		
 		logger.info("Entering dailyBatchAggregateLoad() cron");
