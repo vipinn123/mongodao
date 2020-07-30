@@ -105,6 +105,26 @@ public class MongoDaoController{
 		return result1;
 	}
 	
+	@GetMapping(path="/aggregatedPullFromMinuteBatch")
+	public @ResponseBody List<Document> aggregatedPullFromMinuteBatch ( @RequestParam String startDate
+	      , @RequestParam String endDate
+	      , @RequestParam int interval ) throws JSONException, IOException, ParseException {
+		
+		logger.info("Entering /aggregatedPullFromMinuteBatch");
+		
+		List <Document> result1;
+			
+		logger.info("startDate : "+ startDate);
+		logger.info("endDate : "+ endDate);
+		logger.info("interval : "+ interval);
+	
+		result1 = mongodbFetch(startDate,endDate,interval);
+
+		logger.info("Exiting /aggregatedPullFromMinuteBatch");
+		
+		return result1;
+	}
+	
 	@GetMapping(path="/aggregatedMinuteLoad")
 	public @ResponseBody Document aggregatedMinuteLoad ( @RequestParam String startDate
 	      , @RequestParam String endDate
@@ -143,8 +163,8 @@ public class MongoDaoController{
 	        
 	        AggregateIterable<Document> result1 = collection.aggregate(Arrays.asList(
 	        		match(and(gte("tickTimestamp",startDate),lte("tickTimestamp",endDate))),
-	        		eq("$set", eq("tickDate", eq("$dateToParts", new Document().append("date", "$tickTimestamp").append("timezone", "+0530")))),
-	        		eq("$set",eq("tickDate.interval",new Document("$subtract",Arrays.asList("$tickDate.minute",new Document("$mod",Arrays.asList("$tickDate.minute",interval)))))),
+	        		eq("$addFields", eq("tickDate", eq("$dateToParts", new Document().append("date", "$tickTimestamp").append("timezone", "+0530")))),
+	        		eq("$addFields",eq("tickDate.interval",new Document("$subtract",Arrays.asList("$tickDate.minute",new Document("$mod",Arrays.asList("$tickDate.minute",interval)))))),
 	        		project(exclude("tickDate.millisecond", "tickDate.second","tickDate.minute")),
 	        		//project(exclude("tickDate.millisecond", "tickDate.second")),
 	        		sort(ascending("tickTimestamp")),
